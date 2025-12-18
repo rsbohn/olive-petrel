@@ -20,5 +20,11 @@ Thumbs.db
 # Publish output folders
 publish/
 
-# Tape images (local artifacts)
+# media images (local artifacts)
 *.tu56
+*.rx01
+*.rx02
+
+# cores
+000
+001

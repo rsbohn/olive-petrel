@@ -17,6 +17,12 @@ The RX8E controller uses IOT codes in the 75x range:
     rx1 read 0 1 0400 -- read track 0 sector 1 to address 0400
     rx1 write 0 2 0400 -- write track 0 sector 2 from address 0400
 
+In this emulator, `LCD` loads a word whose low 5 bits are the sector (0–25),
+bit 5 (0020) selects unit 1, and bit 6 (0040) selects write mode (otherwise
+read). The second `LCD` loads the track (0–76). `INTR` kicks off the operation,
+`STR`/`SER`/`SDN` are ready/error/done skips, and `XDR` transfers one 12-bit
+word at a time.
+
 ## Usage in guest system
 
 ### Sample PDP-8 Assembly: Read and Write a Floppy Sector

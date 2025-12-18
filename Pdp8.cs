@@ -16,6 +16,13 @@ public sealed class Pdp8
     private static readonly ushort Lpsf = OctalConstant("06602");
     private static readonly ushort Lpt = OctalConstant("06604");
     private static readonly ushort LptClear = OctalConstant("06606");
+    private static readonly ushort RxLcd = OctalConstant("06751");
+    private static readonly ushort RxXdr = OctalConstant("06752");
+    private static readonly ushort RxStr = OctalConstant("06753");
+    private static readonly ushort RxSer = OctalConstant("06754");
+    private static readonly ushort RxSdn = OctalConstant("06755");
+    private static readonly ushort RxIntr = OctalConstant("06756");
+    private static readonly ushort RxInit = OctalConstant("06757");
 
     private readonly ushort[] _memory = new ushort[MemorySize];
 
@@ -26,6 +33,7 @@ public sealed class Pdp8
     public bool Link { get; private set; }
     public bool Halted { get; private set; }
     public LinePrinter? LinePrinter { get; set; }
+    public Rx8e? Rx8e { get; set; }
 
     public void SetProgramCounter(ushort value)
     {
@@ -322,6 +330,68 @@ public sealed class Pdp8
         {
             var ch = (char)(AC & 0xFF);
             LinePrinter?.Write(ch);
+            return 1;
+        }
+
+        if (instruction == RxLcd)
+        {
+            Rx8e?.LoadCommand(AC);
+            return 1;
+        }
+
+        if (instruction == RxXdr)
+        {
+            if (Rx8e is not null)
+            {
+                AC = Rx8e.Transfer(AC);
+            }
+
+            return 1;
+        }
+
+        if (instruction == RxStr)
+        {
+            if (Rx8e?.SkipOnTransferReady() == true)
+            {
+                PC = (ushort)((PC + 1) & 0xFFF);
+            }
+
+            return 1;
+        }
+
+        if (instruction == RxSer)
+        {
+            if (Rx8e?.SkipOnError() == true)
+            {
+                PC = (ushort)((PC + 1) & 0xFFF);
+            }
+
+            return 1;
+        }
+
+        if (instruction == RxSdn)
+        {
+            if (Rx8e?.SkipOnDone() == true)
+            {
+                PC = (ushort)((PC + 1) & 0xFFF);
+            }
+
+            return 1;
+        }
+
+        if (instruction == RxIntr)
+        {
+            if (Rx8e is not null)
+            {
+                AC = Rx8e.InitializeAndReadStatus();
+            }
+
+            return 1;
+        }
+
+        if (instruction == RxInit)
+        {
+            Rx8e?.Reset();
             return 1;
         }
 

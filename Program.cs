@@ -8,7 +8,9 @@ const int Tc08DataDevice = 9;
 var machine = new Pdp8();
 var tc08 = new Tc08();
 var linePrinter = new LinePrinter();
+var rx8e = new Rx8e();
 machine.LinePrinter = linePrinter;
+machine.Rx8e = rx8e;
 Console.WriteLine("Olive Petrel PDP-8 Emulator");
 Console.WriteLine("Type 'help' for commands.");
 
@@ -61,7 +63,7 @@ while (true)
             SetProgramCounter(machine, commandArgs);
             break;
         case "show":
-            ShowDevice(tc08, linePrinter, commandArgs);
+            ShowDevice(tc08, linePrinter, rx8e, commandArgs);
             break;
         case "step":
         case "s":
@@ -75,7 +77,7 @@ while (true)
             TraceMachine(machine, commandArgs);
             break;
         default:
-            if (TryHandleDeviceCommand(machine, tc08, linePrinter, commandArgs))
+            if (TryHandleDeviceCommand(machine, tc08, linePrinter, rx8e, commandArgs))
             {
                 break;
             }
@@ -128,11 +130,14 @@ static void PrintHelp()
     Console.WriteLine("  regs                Show registers.");
     Console.WriteLine("  mem <addr> [count]  Dump memory (octal, e.g. 020).");
     Console.WriteLine("  dep <addr> <word|string>.. Deposit octal words or ASCII strings.");
-    Console.WriteLine("  dt0|dt1 att <file> [new]   Attach or create a DECtape image.");
+    Console.WriteLine("  dt0|dt1 att|attach <file> [new]   Attach or create a DECtape image.");
     Console.WriteLine("  dt0|dt1 read <block> <addr>  Read a 129-word block into memory.");
     Console.WriteLine("  dt0|dt1 write <block> <addr> Write a 129-word block from memory.");
-    Console.WriteLine("  lpt att <file>       Attach a line printer output file.");
+    Console.WriteLine("  lpt att|attach <file>       Attach a line printer output file.");
     Console.WriteLine("  watchdog restart     Restart the watchdog.");
+    Console.WriteLine("  rx0|rx1 att|attach <file> [new] Attach or create an RX01/RX02 image.");
+    Console.WriteLine("  rx0|rx1 read <track> <sector> <addr>  Read a sector into memory.");
+    Console.WriteLine("  rx0|rx1 write <track> <sector> <addr> Write a sector from memory.");
     Console.WriteLine("  load <file>         Load a simple octal image.");
     Console.WriteLine("  save <file>         Save core memory as a loadable image.");
     Console.WriteLine("  pc <addr>           Set the program counter.");
@@ -229,7 +234,7 @@ static void DepositMemory(Pdp8 machine, List<string> args)
     Console.WriteLine($"Deposited {deposited} word(s) starting at {Pdp8.ToOctal(address, 4)}.");
 }
 
-static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrinter, List<string> args)
+static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrinter, Rx8e rx8e, List<string> args)
 {
     var device = args[0].ToLowerInvariant();
     switch (device)
@@ -237,6 +242,10 @@ static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrin
         case "dt0":
         case "dt1":
             HandleTc08Device(machine, tc08, args);
+            return true;
+        case "rx0":
+        case "rx1":
+            HandleRx8eDevice(machine, rx8e, args);
             return true;
         case "lpt":
             HandleLinePrinterCommand(linePrinter, args);
@@ -269,6 +278,7 @@ static void HandleTc08Device(Pdp8 machine, Tc08 tc08, List<string> args)
     switch (deviceCommand)
     {
         case "att":
+        case "attach":
             AttachTape(tc08, args, driveIndex);
             return;
         case "read":
@@ -276,7 +286,7 @@ static void HandleTc08Device(Pdp8 machine, Tc08 tc08, List<string> args)
             HandleTapeCommand(machine, tc08, args);
             return;
         default:
-            Console.WriteLine("Unknown TC08 command. Use att, read, or write.");
+            Console.WriteLine("Unknown TC08 command. Use att/attach, read, or write.");
             return;
     }
 }
@@ -285,16 +295,16 @@ static void HandleLinePrinterCommand(LinePrinter linePrinter, List<string> args)
 {
     if (args.Count < 2)
     {
-        Console.WriteLine("Usage: lpt att <file>");
+        Console.WriteLine("Usage: lpt att|attach <file>");
         return;
     }
 
     var deviceCommand = args[1].ToLowerInvariant();
-    if (deviceCommand == "att")
+    if (deviceCommand == "att" || deviceCommand == "attach")
     {
         if (args.Count < 3)
         {
-            Console.WriteLine("Usage: lpt att <file>");
+            Console.WriteLine("Usage: lpt att|attach <file>");
             return;
         }
 
@@ -309,7 +319,7 @@ static void HandleLinePrinterCommand(LinePrinter linePrinter, List<string> args)
         return;
     }
 
-    Console.WriteLine("Unknown LPT command. Use att.");
+    Console.WriteLine("Unknown LPT command. Use att|attach.");
 }
 
 static void HandleWatchdogCommand(List<string> args)
@@ -328,6 +338,152 @@ static void HandleWatchdogCommand(List<string> args)
     }
 
     Console.WriteLine("Unknown watchdog command. Use restart.");
+}
+
+static void HandleRx8eDevice(Pdp8 machine, Rx8e rx8e, List<string> args)
+{
+    if (args.Count < 2)
+    {
+        Console.WriteLine("Usage: rx0|rx1 att|attach <file> [new]");
+        Console.WriteLine("       rx0|rx1 read <track> <sector> <addr>");
+        Console.WriteLine("       rx0|rx1 write <track> <sector> <addr>");
+        return;
+    }
+
+    var deviceCommand = args[1].ToLowerInvariant();
+    var drive = args[0] == "rx1" ? 1 : 0;
+    switch (deviceCommand)
+    {
+        case "att":
+        case "attach":
+            AttachRx(rx8e, drive, args);
+            return;
+        case "read":
+            RxRead(machine, rx8e, drive, args);
+            return;
+        case "write":
+            RxWrite(machine, rx8e, drive, args);
+            return;
+        default:
+            Console.WriteLine("Unknown RX8E command. Use attach, read, or write.");
+            return;
+    }
+}
+
+static void AttachRx(Rx8e rx8e, int drive, List<string> args)
+{
+    if (args.Count < 3)
+    {
+        Console.WriteLine("Usage: rx0|rx1 att|attach <file> [new]");
+        return;
+    }
+
+    var createIfMissing = args.Count > 3 && string.Equals(args[^1], "new", StringComparison.OrdinalIgnoreCase);
+    var pathArgs = createIfMissing ? args.GetRange(2, args.Count - 3) : args.GetRange(2, args.Count - 2);
+    if (pathArgs.Count == 0)
+    {
+        Console.WriteLine("Usage: rx0|rx1 att|attach <file> [new]");
+        return;
+    }
+
+    var path = string.Join(' ', pathArgs);
+    if (!rx8e.Attach(drive, path, createIfMissing, out var error))
+    {
+        Console.WriteLine($"Attach failed: {error}");
+        return;
+    }
+
+    Console.WriteLine($"RX{drive} attached to {path}.");
+}
+
+static void RxRead(Pdp8 machine, Rx8e rx8e, int drive, List<string> args)
+{
+    if (args.Count < 5)
+    {
+        Console.WriteLine("Usage: rx0|rx1 read <track> <sector> <addr>");
+        return;
+    }
+
+    if (!TryParseOctal(args[2], out var track))
+    {
+        Console.WriteLine("Invalid track.");
+        return;
+    }
+
+    if (!TryParseOctal(args[3], out var sector))
+    {
+        Console.WriteLine("Invalid sector.");
+        return;
+    }
+
+    if (!TryParseOctal(args[4], out var addr))
+    {
+        Console.WriteLine("Invalid address.");
+        return;
+    }
+
+    var status = rx8e.GetStatus(drive);
+    var wordsPerSector = status.Density == RxDensity.Rx02 ? 128 : 64;
+    var buffer = new ushort[wordsPerSector];
+    if (!rx8e.TryReadSector(drive, track, sector, buffer, out var error))
+    {
+        Console.WriteLine($"Read failed: {error}");
+        return;
+    }
+
+    var current = addr & 0xFFF;
+    for (var i = 0; i < wordsPerSector; i++)
+    {
+        machine.Write(current, buffer[i]);
+        current = (current + 1) & 0xFFF;
+    }
+
+    Console.WriteLine($"RX{drive} read track {track} sector {sector} into {Pdp8.ToOctal(addr, 4)}.");
+}
+
+static void RxWrite(Pdp8 machine, Rx8e rx8e, int drive, List<string> args)
+{
+    if (args.Count < 5)
+    {
+        Console.WriteLine("Usage: rx0|rx1 write <track> <sector> <addr>");
+        return;
+    }
+
+    if (!TryParseOctal(args[2], out var track))
+    {
+        Console.WriteLine("Invalid track.");
+        return;
+    }
+
+    if (!TryParseOctal(args[3], out var sector))
+    {
+        Console.WriteLine("Invalid sector.");
+        return;
+    }
+
+    if (!TryParseOctal(args[4], out var addr))
+    {
+        Console.WriteLine("Invalid address.");
+        return;
+    }
+
+    var status = rx8e.GetStatus(drive);
+    var wordsPerSector = status.Density == RxDensity.Rx02 ? 128 : 64;
+    var buffer = new ushort[wordsPerSector];
+    var current = addr & 0xFFF;
+    for (var i = 0; i < wordsPerSector; i++)
+    {
+        buffer[i] = machine.Read(current);
+        current = (current + 1) & 0xFFF;
+    }
+
+    if (!rx8e.TryWriteSector(drive, track, sector, buffer, out var error))
+    {
+        Console.WriteLine($"Write failed: {error}");
+        return;
+    }
+
+    Console.WriteLine($"RX{drive} wrote track {track} sector {sector} from {Pdp8.ToOctal(addr, 4)}.");
 }
 
 static void HandleTapeCommand(Pdp8 machine, Tc08 tc08, List<string> args)
@@ -436,7 +592,7 @@ static void AttachTape(Tc08 tc08, List<string> args, int driveIndex)
     Console.WriteLine($"Attached DT{driveIndex} to {attachedPath}.");
 }
 
-static void ShowDevice(Tc08 tc08, LinePrinter linePrinter, List<string> args)
+static void ShowDevice(Tc08 tc08, LinePrinter linePrinter, Rx8e rx8e, List<string> args)
 {
     if (args.Count < 2)
     {
@@ -447,7 +603,7 @@ static void ShowDevice(Tc08 tc08, LinePrinter linePrinter, List<string> args)
     var device = args[1].ToLowerInvariant();
     if (device == "dev")
     {
-        ShowAllDevices(tc08, linePrinter);
+        ShowAllDevices(tc08, linePrinter, rx8e);
         return;
     }
 
@@ -460,7 +616,7 @@ static void ShowDevice(Tc08 tc08, LinePrinter linePrinter, List<string> args)
     Console.WriteLine("Unknown device.");
 }
 
-static void ShowAllDevices(Tc08 tc08, LinePrinter linePrinter)
+static void ShowAllDevices(Tc08 tc08, LinePrinter linePrinter, Rx8e rx8e)
 {
     Console.WriteLine("Devices:");
     Console.WriteLine($"  TTI ({Pdp8.ToOctal(TtiDevice, 2)}): console input (KSR)");
@@ -469,6 +625,11 @@ static void ShowAllDevices(Tc08 tc08, LinePrinter linePrinter)
         ? $"attached to {linePrinter.Path}"
         : "not attached";
     Console.WriteLine($"  LPT (060): line printer ({lptStatus})");
+    var rx0 = rx8e.GetStatus(0);
+    var rx1 = rx8e.GetStatus(1);
+    var rx0Status = rx0.Attached ? $"{rx0.Density} @ {rx0.Path}" : "empty";
+    var rx1Status = rx1.Attached ? $"{rx1.Density} @ {rx1.Path}" : "empty";
+    Console.WriteLine($"  RX8E: rx0 {rx0Status}, rx1 {rx1Status}");
 
     var dt0 = tc08.GetDriveStatus(0);
     var dt1 = tc08.GetDriveStatus(1);
