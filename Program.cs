@@ -7,6 +7,8 @@ const int Tc08DataDevice = 9;
 
 var machine = new Pdp8();
 var tc08 = new Tc08();
+var linePrinter = new LinePrinter();
+machine.LinePrinter = linePrinter;
 Console.WriteLine("Olive Petrel PDP-8 Emulator");
 Console.WriteLine("Type 'help' for commands.");
 
@@ -49,13 +51,6 @@ while (true)
         case "dep":
             DepositMemory(machine, commandArgs);
             break;
-        case "dt0":
-        case "dt1":
-            HandleTapeCommand(machine, tc08, commandArgs);
-            break;
-        case "att":
-            AttachTape(tc08, commandArgs);
-            break;
         case "load":
             LoadImage(machine, commandArgs);
             break;
@@ -66,7 +61,7 @@ while (true)
             SetProgramCounter(machine, commandArgs);
             break;
         case "show":
-            ShowDevice(tc08, commandArgs);
+            ShowDevice(tc08, linePrinter, commandArgs);
             break;
         case "step":
         case "s":
@@ -76,7 +71,15 @@ while (true)
         case "r":
             RunMachine(machine, commandArgs);
             break;
+        case "trace":
+            TraceMachine(machine, commandArgs);
+            break;
         default:
+            if (TryHandleDeviceCommand(machine, tc08, linePrinter, commandArgs))
+            {
+                break;
+            }
+
             Console.WriteLine("Unknown command. Type 'help' for available commands.");
             break;
     }
@@ -125,9 +128,11 @@ static void PrintHelp()
     Console.WriteLine("  regs                Show registers.");
     Console.WriteLine("  mem <addr> [count]  Dump memory (octal, e.g. 020).");
     Console.WriteLine("  dep <addr> <word|string>.. Deposit octal words or ASCII strings.");
+    Console.WriteLine("  dt0|dt1 att <file> [new]   Attach or create a DECtape image.");
     Console.WriteLine("  dt0|dt1 read <block> <addr>  Read a 129-word block into memory.");
     Console.WriteLine("  dt0|dt1 write <block> <addr> Write a 129-word block from memory.");
-    Console.WriteLine("  att dt0|dt1 <file> [new]  Attach or create a DECtape image.");
+    Console.WriteLine("  lpt att <file>       Attach a line printer output file.");
+    Console.WriteLine("  watchdog restart     Restart the watchdog.");
     Console.WriteLine("  load <file>         Load a simple octal image.");
     Console.WriteLine("  save <file>         Save core memory as a loadable image.");
     Console.WriteLine("  pc <addr>           Set the program counter.");
@@ -135,6 +140,7 @@ static void PrintHelp()
     Console.WriteLine("  show dt             Show TC08 status.");
     Console.WriteLine("  step [count]        Execute one or more instructions.");
     Console.WriteLine("  run [max]           Run up to max instructions (default 100000).");
+    Console.WriteLine("  trace [count]       Step count instructions, showing registers after each.");
     Console.WriteLine("  reset               Clear memory and registers.");
     Console.WriteLine("  quit                Exit the emulator.");
     Console.WriteLine();
@@ -223,6 +229,107 @@ static void DepositMemory(Pdp8 machine, List<string> args)
     Console.WriteLine($"Deposited {deposited} word(s) starting at {Pdp8.ToOctal(address, 4)}.");
 }
 
+static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrinter, List<string> args)
+{
+    var device = args[0].ToLowerInvariant();
+    switch (device)
+    {
+        case "dt0":
+        case "dt1":
+            HandleTc08Device(machine, tc08, args);
+            return true;
+        case "lpt":
+            HandleLinePrinterCommand(linePrinter, args);
+            return true;
+        case "watchdog":
+            HandleWatchdogCommand(args);
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void HandleTc08Device(Pdp8 machine, Tc08 tc08, List<string> args)
+{
+    if (args.Count < 2)
+    {
+        Console.WriteLine("Usage: dt0|dt1 att <file> [new]");
+        Console.WriteLine("       dt0|dt1 read <block> <addr>");
+        Console.WriteLine("       dt0|dt1 write <block> <addr>");
+        return;
+    }
+
+    if (!TryParseDrive(args[0], out var driveIndex))
+    {
+        Console.WriteLine("Unknown drive. Use dt0 or dt1.");
+        return;
+    }
+
+    var deviceCommand = args[1].ToLowerInvariant();
+    switch (deviceCommand)
+    {
+        case "att":
+            AttachTape(tc08, args, driveIndex);
+            return;
+        case "read":
+        case "write":
+            HandleTapeCommand(machine, tc08, args);
+            return;
+        default:
+            Console.WriteLine("Unknown TC08 command. Use att, read, or write.");
+            return;
+    }
+}
+
+static void HandleLinePrinterCommand(LinePrinter linePrinter, List<string> args)
+{
+    if (args.Count < 2)
+    {
+        Console.WriteLine("Usage: lpt att <file>");
+        return;
+    }
+
+    var deviceCommand = args[1].ToLowerInvariant();
+    if (deviceCommand == "att")
+    {
+        if (args.Count < 3)
+        {
+            Console.WriteLine("Usage: lpt att <file>");
+            return;
+        }
+
+        var path = string.Join(' ', args.GetRange(2, args.Count - 2));
+        if (!linePrinter.Attach(path, out var error))
+        {
+            Console.WriteLine(error);
+            return;
+        }
+
+        Console.WriteLine($"Line printer attached to {linePrinter.Path}.");
+        return;
+    }
+
+    Console.WriteLine("Unknown LPT command. Use att.");
+}
+
+static void HandleWatchdogCommand(List<string> args)
+{
+    if (args.Count < 2)
+    {
+        Console.WriteLine("Usage: watchdog restart");
+        return;
+    }
+
+    var deviceCommand = args[1].ToLowerInvariant();
+    if (deviceCommand == "restart")
+    {
+        Console.WriteLine("Watchdog device not yet implemented; restart acknowledged.");
+        return;
+    }
+
+    Console.WriteLine("Unknown watchdog command. Use restart.");
+}
+
 static void HandleTapeCommand(Pdp8 machine, Tc08 tc08, List<string> args)
 {
     if (args.Count < 4)
@@ -297,17 +404,11 @@ static void HandleTapeCommand(Pdp8 machine, Tc08 tc08, List<string> args)
     Console.WriteLine("Unknown operation. Use read or write.");
 }
 
-static void AttachTape(Tc08 tc08, List<string> args)
+static void AttachTape(Tc08 tc08, List<string> args, int driveIndex)
 {
     if (args.Count < 3)
     {
-        Console.WriteLine("Usage: att dt0|dt1 <file> [new]");
-        return;
-    }
-
-    if (!TryParseDrive(args[1], out var driveIndex))
-    {
-        Console.WriteLine("Unknown drive. Use dt0 or dt1.");
+        Console.WriteLine("Usage: dt0|dt1 att <file> [new]");
         return;
     }
 
@@ -316,31 +417,16 @@ static void AttachTape(Tc08 tc08, List<string> args)
     if (args.Count > 3 && string.Equals(args[^1], "new", StringComparison.OrdinalIgnoreCase))
     {
         createIfMissing = true;
-        if (args.Count == 4)
-        {
-            var pathOnly = args[2];
-            if (!tc08.Attach(driveIndex, pathOnly, createIfMissing, out attachError))
-            {
-                Console.WriteLine($"Attach failed: {attachError}");
-                return;
-            }
+    }
 
-            Console.WriteLine($"Attached DT{driveIndex} to {pathOnly}.");
-            return;
-        }
-
-        var path = string.Join(' ', args.GetRange(2, args.Count - 3));
-        if (!tc08.Attach(driveIndex, path, createIfMissing, out attachError))
-        {
-            Console.WriteLine($"Attach failed: {attachError}");
-            return;
-        }
-
-        Console.WriteLine($"Attached DT{driveIndex} to {path}.");
+    var pathArgs = createIfMissing ? args.GetRange(2, args.Count - 3) : args.GetRange(2, args.Count - 2);
+    if (pathArgs.Count == 0)
+    {
+        Console.WriteLine("Usage: dt0|dt1 att <file> [new]");
         return;
     }
 
-    var attachedPath = args.Count == 3 ? args[2] : string.Join(' ', args.GetRange(2, args.Count - 2));
+    var attachedPath = string.Join(' ', pathArgs);
     if (!tc08.Attach(driveIndex, attachedPath, createIfMissing, out attachError))
     {
         Console.WriteLine($"Attach failed: {attachError}");
@@ -350,7 +436,7 @@ static void AttachTape(Tc08 tc08, List<string> args)
     Console.WriteLine($"Attached DT{driveIndex} to {attachedPath}.");
 }
 
-static void ShowDevice(Tc08 tc08, List<string> args)
+static void ShowDevice(Tc08 tc08, LinePrinter linePrinter, List<string> args)
 {
     if (args.Count < 2)
     {
@@ -361,7 +447,7 @@ static void ShowDevice(Tc08 tc08, List<string> args)
     var device = args[1].ToLowerInvariant();
     if (device == "dev")
     {
-        ShowAllDevices(tc08);
+        ShowAllDevices(tc08, linePrinter);
         return;
     }
 
@@ -374,11 +460,15 @@ static void ShowDevice(Tc08 tc08, List<string> args)
     Console.WriteLine("Unknown device.");
 }
 
-static void ShowAllDevices(Tc08 tc08)
+static void ShowAllDevices(Tc08 tc08, LinePrinter linePrinter)
 {
     Console.WriteLine("Devices:");
     Console.WriteLine($"  TTI ({Pdp8.ToOctal(TtiDevice, 2)}): console input (KSR)");
     Console.WriteLine($"  TTO ({Pdp8.ToOctal(TtoDevice, 2)}): console output (KSR)");
+    var lptStatus = linePrinter.Attached
+        ? $"attached to {linePrinter.Path}"
+        : "not attached";
+    Console.WriteLine($"  LPT (060): line printer ({lptStatus})");
 
     var dt0 = tc08.GetDriveStatus(0);
     var dt1 = tc08.GetDriveStatus(1);
@@ -575,9 +665,34 @@ static void RunMachine(Pdp8 machine, List<string> args)
         return;
     }
 
+    machine.ClearHalt();
     var executed = machine.Run(maxSteps);
     Console.WriteLine($"Executed {executed} step(s)." );
     PrintRegisters(machine);
+}
+
+static void TraceMachine(Pdp8 machine, List<string> args)
+{
+    var steps = 1;
+    if (args.Count > 1 && !TryParseOctal(args[1], out steps))
+    {
+        Console.WriteLine("Invalid trace count.");
+        return;
+    }
+
+    machine.ClearHalt();
+    for (var i = 0; i < steps; i++)
+    {
+        if (machine.Halted)
+        {
+            Console.WriteLine("Halt encountered.");
+            break;
+        }
+
+        machine.Step();
+        Console.Write($"{i + 1}: ");
+        PrintRegisters(machine);
+    }
 }
 
 static bool TryParseOctal(string token, out int value)

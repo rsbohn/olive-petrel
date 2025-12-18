@@ -12,6 +12,10 @@ public sealed class Pdp8
     private static readonly ushort Tsf = OctalConstant("06042");
     private static readonly ushort Tls = OctalConstant("06044");
     private static readonly ushort TlsClear = OctalConstant("06046");
+    private static readonly ushort Lpcf = OctalConstant("06601");
+    private static readonly ushort Lpsf = OctalConstant("06602");
+    private static readonly ushort Lpt = OctalConstant("06604");
+    private static readonly ushort LptClear = OctalConstant("06606");
 
     private readonly ushort[] _memory = new ushort[MemorySize];
 
@@ -21,10 +25,16 @@ public sealed class Pdp8
     public ushort IR { get; private set; }
     public bool Link { get; private set; }
     public bool Halted { get; private set; }
+    public LinePrinter? LinePrinter { get; set; }
 
     public void SetProgramCounter(ushort value)
     {
         PC = Mask12(value);
+    }
+
+    public void ClearHalt()
+    {
+        Halted = false;
     }
 
     public void Reset()
@@ -294,6 +304,24 @@ public sealed class Pdp8
         {
             var ch = (char)(AC & 0xFF);
             Console.Write(ch);
+            return 1;
+        }
+
+        if (instruction == Lpcf)
+        {
+            return 1;
+        }
+
+        if (instruction == Lpsf)
+        {
+            PC = (ushort)((PC + 1) & 0xFFF);
+            return 1;
+        }
+
+        if (instruction == Lpt || instruction == LptClear)
+        {
+            var ch = (char)(AC & 0xFF);
+            LinePrinter?.Write(ch);
             return 1;
         }
 
