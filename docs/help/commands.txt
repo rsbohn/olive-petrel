@@ -1,0 +1,30 @@
+Olive Petrel monitor commands
+==============================
+
+General:
+  .help               Open help shell (topics from docs/help)
+  tnfs                Open TNFS subshell (mount/list/get/umount/status)
+  regs                Show registers
+  mem <addr> [count]  Dump memory (octal)
+  dep <addr> <word|string>.. Deposit octal words or ASCII strings
+  load <file>         Load a simple octal image (auto-detects S-records)
+  .a <src.pa> [dest]  Assemble PAL source to an S-record file
+  save <file>         Save core memory as a loadable image
+  pc <addr>           Set the program counter
+  step [count]        Execute instructions
+  run [max]           Run up to max instructions (default 100000)
+  trace [count]       Step and show registers after each instruction
+  reset               Clear memory and registers
+  quit                Exit the emulator
+
+Devices:
+  show dev            Show attached devices
+  show dt             Show TC08 status
+  dt0|dt1 att|attach <file> [new]    Attach or create a DECtape image
+  dt0|dt1 read <block> <addr>        Read a 129-word block into memory
+  dt0|dt1 write <block> <addr>       Write a 129-word block from memory
+  rx0|rx1 att|attach <file> [new]    Attach or create an RX01/RX02 image
+  rx0|rx1 read <track> <sector> <addr>   Read a sector into memory
+  rx0|rx1 write <track> <sector> <addr>  Write a sector from memory
+  lpt att|attach <file>              Attach a line printer output file
+  watchdog restart                   Restart the watchdog (placeholder)

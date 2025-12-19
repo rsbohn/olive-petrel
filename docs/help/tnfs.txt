@@ -1,0 +1,15 @@
+TNFS shell
+==========
+
+Command: tnfs
+
+Opens a TNFS subshell for mounting and unmounting a TNFS server. Default port
+is 16384 and default protocol version is 1.2.
+
+Commands:
+  mount <host> <path> [user <id>] [pass <pwd>] [port <port>] [ver <major.minor>]
+  ls [path]               List files (defaults to mount path)
+  get <remote> [local]    Download a file (default: ./sd/<name>)
+  umount                 Disconnect the current session
+  status                 Show connection and mount info
+  exit                   Return to the main shell

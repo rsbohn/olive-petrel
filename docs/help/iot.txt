@@ -1,0 +1,17 @@
+IOT quick reference
+===================
+
+Console:
+  TTI (03) : keyboard input (KCF/KSF/KRS/KRB)
+  TTO (04) : console output (TCF/TSF/TLS)
+
+Line printer:
+  LPT (060) : uses IOTs 06601/06602/06604/06606 (output to attached file)
+
+DECtape TC08:
+  Control device 076, Data device 077 (IOTs 6762/6764/6766/6771)
+  See help topic tc08 for monitor commands
+
+RX8E floppy:
+  Uses IOTs 06751-06757
+  See help topic rx8e for details

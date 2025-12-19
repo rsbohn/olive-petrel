@@ -1,0 +1,15 @@
+TC08 DECtape quick reference
+============================
+
+Attach and status:
+  dt0|dt1 att|attach <file> [new]
+  show dt
+
+Block I/O:
+  dt0|dt1 read <block> <addr>
+  dt0|dt1 write <block> <addr>
+    - blocks are 129 words (128 data + checksum forced to 0)
+    - args are octal
+
+IOT devices:
+  Control: device 076, Data: device 077 (e.g., DTSF 6764, DTLB 6766, DTXA 6771)

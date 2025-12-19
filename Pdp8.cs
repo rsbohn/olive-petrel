@@ -16,6 +16,10 @@ public sealed class Pdp8
     private static readonly ushort Lpsf = OctalConstant("06602");
     private static readonly ushort Lpt = OctalConstant("06604");
     private static readonly ushort LptClear = OctalConstant("06606");
+    private static readonly ushort Dtca = OctalConstant("06762");
+    private static readonly ushort Dtsf = OctalConstant("06764");
+    private static readonly ushort Dtlb = OctalConstant("06766");
+    private static readonly ushort Dtxa = OctalConstant("06771");
     private static readonly ushort RxLcd = OctalConstant("06751");
     private static readonly ushort RxXdr = OctalConstant("06752");
     private static readonly ushort RxStr = OctalConstant("06753");
@@ -25,6 +29,9 @@ public sealed class Pdp8
     private static readonly ushort RxInit = OctalConstant("06757");
 
     private readonly ushort[] _memory = new ushort[MemorySize];
+    private bool _ttyOutputReady = true;
+    private int _tc08TransferAddress;
+    private bool _tc08Ready;
 
     public ushort AC { get; private set; }
     public ushort MQ { get; private set; }
@@ -34,6 +41,7 @@ public sealed class Pdp8
     public bool Halted { get; private set; }
     public LinePrinter? LinePrinter { get; set; }
     public Rx8e? Rx8e { get; set; }
+    public Tc08? Tc08 { get; set; }
 
     public void SetProgramCounter(ushort value)
     {
@@ -54,6 +62,9 @@ public sealed class Pdp8
         IR = 0;
         Link = false;
         Halted = false;
+        _ttyOutputReady = true;
+        _tc08Ready = false;
+        _tc08TransferAddress = 0;
     }
 
     public ushort Read(int address)
@@ -71,6 +82,16 @@ public sealed class Pdp8
     public int LoadImage(string path)
     {
         var lines = File.ReadAllLines(path);
+        var firstContentLine = lines
+            .Select(StripComment)
+            .Select(l => l.Trim())
+            .FirstOrDefault(l => !string.IsNullOrEmpty(l));
+
+        if (firstContentLine is not null && LooksLikeSRecord(firstContentLine))
+        {
+            return LoadSRecord(lines);
+        }
+
         int address = 0;
         int loaded = 0;
 
@@ -121,6 +142,125 @@ public sealed class Pdp8
         }
 
         return loaded;
+    }
+
+    private static bool LooksLikeSRecord(string line) =>
+        line.Length > 1 && line[0] == 'S' && char.IsDigit(line[1]);
+
+    private int LoadSRecord(string[] lines)
+    {
+        var byteMap = new SortedDictionary<int, byte>();
+        int? startWordAddress = null;
+
+        foreach (var raw in lines)
+        {
+            var line = StripComment(raw).Trim();
+            if (string.IsNullOrEmpty(line) || line[0] != 'S')
+            {
+                continue;
+            }
+
+            if (line.Length < 4)
+            {
+                throw new InvalidDataException($"Malformed S-record: '{line}'");
+            }
+
+            var type = line[1];
+            var count = ParseHexByte(line, 2);
+            var address = ParseHexWord(line, 4);
+
+            switch (type)
+            {
+                case '1':
+                {
+                    var dataByteCount = count - 3; // count includes addr(2 bytes) + checksum
+                    var expectedLength = 8 + dataByteCount * 2 + 2; // S1 + count + addr + data + checksum
+                    if (line.Length < expectedLength)
+                    {
+                        throw new InvalidDataException($"Truncated S-record data: '{line}'");
+                    }
+
+                    var dataBytes = ParseHexBytes(line, 8, dataByteCount);
+                    var checksum = ParseHexByte(line, 8 + dataByteCount * 2);
+                    VerifySRecordChecksum(line, count, address, dataBytes, checksum);
+
+                    for (var i = 0; i < dataBytes.Count; i++)
+                    {
+                        byteMap[address + i] = dataBytes[i];
+                    }
+
+                    break;
+                }
+                case '9':
+                {
+                    startWordAddress = address / 2;
+                    break;
+                }
+                default:
+                    // Ignore other record types
+                    break;
+            }
+        }
+
+        var loaded = 0;
+        foreach (var addr in byteMap.Keys.Where(a => a % 2 == 0))
+        {
+            var low = byteMap[addr];
+            var high = byteMap.TryGetValue(addr + 1, out var hi) ? hi : (byte)0;
+            var word = (ushort)((high << 8) | low);
+            Write(addr / 2, word);
+            loaded++;
+        }
+
+        if (startWordAddress is not null)
+        {
+            SetProgramCounter((ushort)startWordAddress.Value);
+        }
+
+        return loaded;
+    }
+
+    private static byte ParseHexByte(string text, int offset)
+    {
+        if (offset + 2 > text.Length)
+        {
+            throw new InvalidDataException($"Truncated hex byte in '{text}'");
+        }
+
+        return byte.Parse(text.AsSpan(offset, 2), System.Globalization.NumberStyles.HexNumber);
+    }
+
+    private static int ParseHexWord(string text, int offset)
+    {
+        var high = ParseHexByte(text, offset);
+        var low = ParseHexByte(text, offset + 2);
+        return (high << 8) | low;
+    }
+
+    private static List<byte> ParseHexBytes(string text, int offset, int count)
+    {
+        var bytes = new List<byte>(count);
+        for (var i = 0; i < count; i++)
+        {
+            bytes.Add(ParseHexByte(text, offset + i * 2));
+        }
+
+        return bytes;
+    }
+
+    private static void VerifySRecordChecksum(string line, int count, int address, IReadOnlyCollection<byte> dataBytes, byte checksum)
+    {
+        var sum = count + ((address >> 8) & 0xFF) + (address & 0xFF);
+        foreach (var b in dataBytes)
+        {
+            sum += b;
+        }
+
+        var computed = unchecked((byte)~sum);
+        if (computed != checksum)
+        {
+            throw new InvalidDataException($"Checksum mismatch in S-record '{line}'");
+        }
     }
 
     public int Step()
@@ -297,14 +437,13 @@ public sealed class Pdp8
             return 1;
         }
 
-        if (instruction == Tcf)
+        if (instruction == Tcf || instruction == Tsf)
         {
-            return 1;
-        }
+            if (_ttyOutputReady)
+            {
+                PC = (ushort)((PC + 1) & 0xFFF);
+            }
 
-        if (instruction == Tsf)
-        {
-            PC = (ushort)((PC + 1) & 0xFFF);
             return 1;
         }
 
@@ -312,6 +451,7 @@ public sealed class Pdp8
         {
             var ch = (char)(AC & 0xFF);
             Console.Write(ch);
+            _ttyOutputReady = true;
             return 1;
         }
 
@@ -330,6 +470,57 @@ public sealed class Pdp8
         {
             var ch = (char)(AC & 0xFF);
             LinePrinter?.Write(ch);
+            return 1;
+        }
+
+        if (instruction == Dtca)
+        {
+            _tc08Ready = false;
+            _tc08TransferAddress = 0;
+            return 1;
+        }
+
+        if (instruction == Dtxa)
+        {
+            _tc08TransferAddress = AC & 0xFFF;
+            _tc08Ready = false;
+            return 1;
+        }
+
+        if (instruction == Dtsf)
+        {
+            if (_tc08Ready)
+            {
+                PC = (ushort)((PC + 1) & 0xFFF);
+            }
+
+            return 1;
+        }
+
+        if (instruction == Dtlb)
+        {
+            _tc08Ready = false;
+            var drive = (AC & OctalConstant("02000")) != 0 ? 1 : 0;
+            var block = AC & OctalConstant("01777");
+            if (Tc08 is null)
+            {
+                return 1;
+            }
+
+            Span<ushort> buffer = stackalloc ushort[Tc08.WordsPerBlock];
+            if (!Tc08.TryReadBlock(drive, block, buffer, out _))
+            {
+                return 1;
+            }
+
+            for (var i = 0; i < Tc08.WordsPerBlock; i++)
+            {
+                var addr = (_tc08TransferAddress + i) & 0xFFF;
+                Write(addr, buffer[i]);
+            }
+
+            _tc08Ready = true;
+            PC = (ushort)((PC + 1) & 0xFFF);
             return 1;
         }
 
@@ -437,7 +628,34 @@ public sealed class Pdp8
             Link = !Link;
         }
 
-        if ((instruction & 0x08) != 0)
+        var rar = (instruction & 0x08) != 0;
+        var ral = (instruction & 0x04) != 0;
+        var bsw = (instruction & 0x02) != 0;
+        var rotateByTwo = bsw && (rar || ral);
+
+        if (rar && rotateByTwo)
+        {
+            RotateRightTwice();
+        }
+        else if (ral && rotateByTwo)
+        {
+            RotateLeft();
+            RotateLeft();
+        }
+        else if (rar)
+        {
+            RotateRight();
+        }
+        else if (ral)
+        {
+            RotateLeft();
+        }
+        else if (bsw)
+        {
+            AC = (ushort)(((AC & 0x3F) << 6) | ((AC >> 6) & 0x3F));
+        }
+
+        if ((instruction & 0x01) != 0)
         {
             var sum = AC + 1;
             if (sum > 0xFFF)
@@ -446,28 +664,6 @@ public sealed class Pdp8
             }
 
             AC = Mask12((ushort)sum);
-        }
-
-        var rotate = instruction & 0x06;
-        if (rotate != 0)
-        {
-            if (rotate == 0x06)
-            {
-                RotateRightTwice();
-            }
-            else if (rotate == 0x04)
-            {
-                RotateRight();
-            }
-            else if (rotate == 0x02)
-            {
-                RotateLeft();
-            }
-        }
-
-        if ((instruction & 0x01) != 0)
-        {
-            AC = (ushort)(((AC & 0x3F) << 6) | ((AC >> 6) & 0x3F));
         }
 
         return 1;

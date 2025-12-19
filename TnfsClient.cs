@@ -22,6 +22,14 @@ public sealed class TnfsClient : IAsyncDisposable
     private ushort _minRetryMs;
     private bool _mounted;
 
+    public const ushort O_RDONLY = 0x0001;
+    public const ushort O_WRONLY = 0x0002;
+    public const ushort O_RDWR = 0x0003;
+    public const ushort O_APPEND = 0x0008;
+    public const ushort O_CREAT = 0x0100;
+    public const ushort O_TRUNC = 0x0200;
+    public const ushort O_EXCL = 0x0400;
+
     public TnfsClient(string host, int port = 16384, TimeSpan? receiveTimeout = null)
     {
         _remote = new IPEndPoint(Dns.GetHostAddresses(host)[0], port);
@@ -109,6 +117,165 @@ public sealed class TnfsClient : IAsyncDisposable
         return await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<byte> OpenDirAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(4 + Encoding.ASCII.GetByteCount(path) + 1);
+        WriteHeader(writer, _connectionId, TnfsCommand.OpenDir);
+        WriteCString(writer, path);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        ValidateStatus(response, TnfsCommand.OpenDir);
+        if (response.Length < 6)
+        {
+            throw new InvalidOperationException("TNFS OPENDIR response too short.");
+        }
+
+        return response.Span[5];
+    }
+
+    public async Task<string?> ReadDirEntryAsync(byte handle, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(5);
+        WriteHeader(writer, _connectionId, TnfsCommand.ReadDir);
+        writer.GetSpan(1)[0] = handle;
+        writer.Advance(1);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        var status = GetStatus(response);
+        if (status == TnfsStatus.Eof)
+        {
+            return null;
+        }
+
+        ValidateStatus(response, TnfsCommand.ReadDir);
+        if (response.Length < 6)
+        {
+            throw new InvalidOperationException("TNFS READDIR response too short.");
+        }
+
+        var span = response.Span[5..];
+        var terminator = span.IndexOf((byte)0);
+        if (terminator < 0)
+        {
+            throw new InvalidOperationException("TNFS READDIR response missing terminator.");
+        }
+
+        return Encoding.ASCII.GetString(span[..terminator]);
+    }
+
+    public async Task CloseDirAsync(byte handle, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(5);
+        WriteHeader(writer, _connectionId, TnfsCommand.CloseDir);
+        writer.GetSpan(1)[0] = handle;
+        writer.Advance(1);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        ValidateStatus(response, TnfsCommand.CloseDir);
+    }
+
+    public async Task<TnfsStat> StatAsync(string path, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(4 + Encoding.ASCII.GetByteCount(path) + 1);
+        WriteHeader(writer, _connectionId, TnfsCommand.Stat);
+        WriteCString(writer, path);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        ValidateStatus(response, TnfsCommand.Stat);
+        if (response.Length < 27)
+        {
+            throw new InvalidOperationException("TNFS STAT response too short.");
+        }
+
+        var span = response.Span;
+        var offset = 5;
+        var mode = ReadUInt16(span[offset..]); offset += 2;
+        var uid = ReadUInt16(span[offset..]); offset += 2;
+        var gid = ReadUInt16(span[offset..]); offset += 2;
+        var size = ReadUInt32(span[offset..]); offset += 4;
+        var atime = ReadUInt32(span[offset..]); offset += 4;
+        var mtime = ReadUInt32(span[offset..]); offset += 4;
+        var ctime = ReadUInt32(span[offset..]); offset += 4;
+
+        // Skip uid/gid strings if present
+        var uidStrEnd = span[offset..].IndexOf((byte)0);
+        if (uidStrEnd >= 0)
+        {
+            offset += uidStrEnd + 1;
+            var gidStrEnd = span[offset..].IndexOf((byte)0);
+            if (gidStrEnd >= 0)
+            {
+                offset += gidStrEnd + 1;
+            }
+        }
+
+        return new TnfsStat(mode, uid, gid, size, atime, mtime, ctime);
+    }
+
+    public async Task<byte> OpenFileAsync(string path, ushort flags, ushort mode = 0, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(8 + Encoding.ASCII.GetByteCount(path) + 1);
+        WriteHeader(writer, _connectionId, TnfsCommand.Open);
+        WriteUInt16(writer, flags);
+        WriteUInt16(writer, mode);
+        WriteCString(writer, path);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        ValidateStatus(response, TnfsCommand.Open);
+        if (response.Length < 6)
+        {
+            throw new InvalidOperationException("TNFS OPEN response too short.");
+        }
+
+        return response.Span[5];
+    }
+
+    public async Task<TnfsReadResult> ReadFileAsync(byte handle, int requestedBytes, CancellationToken cancellationToken = default)
+    {
+        if (requestedBytes <= 0 || requestedBytes > ushort.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(requestedBytes), "Must be between 1 and 65535.");
+        }
+
+        var writer = new ArrayBufferWriter<byte>(7);
+        WriteHeader(writer, _connectionId, TnfsCommand.Read);
+        writer.GetSpan(1)[0] = handle;
+        writer.Advance(1);
+        WriteUInt16(writer, (ushort)requestedBytes);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        var status = GetStatus(response);
+        if (status == TnfsStatus.Eof)
+        {
+            return TnfsReadResult.Eof;
+        }
+
+        ValidateStatus(response, TnfsCommand.Read);
+        if (response.Length < 7)
+        {
+            throw new InvalidOperationException("TNFS READ response too short.");
+        }
+
+        var length = ReadUInt16(response.Span[5..]);
+        if (response.Length < 7 + length)
+        {
+            throw new InvalidOperationException("TNFS READ response length mismatch.");
+        }
+
+        return new TnfsReadResult(false, length, response.Slice(7, length));
+    }
+
+    public async Task CloseFileAsync(byte handle, CancellationToken cancellationToken = default)
+    {
+        var writer = new ArrayBufferWriter<byte>(5);
+        WriteHeader(writer, _connectionId, TnfsCommand.Close);
+        writer.GetSpan(1)[0] = handle;
+        writer.Advance(1);
+
+        var response = await SendAndReceiveAsync(writer.WrittenMemory, cancellationToken).ConfigureAwait(false);
+        ValidateStatus(response, TnfsCommand.Close);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _udp.Dispose();
@@ -164,6 +331,35 @@ public sealed class TnfsClient : IAsyncDisposable
         return (ushort)(span[0] | (span[1] << 8));
     }
 
+    private static uint ReadUInt32(ReadOnlySpan<byte> span)
+    {
+        if (span.Length < 4)
+        {
+            return 0;
+        }
+
+        return (uint)(span[0] | (span[1] << 8) | (span[2] << 16) | (span[3] << 24));
+    }
+
+    private static TnfsStatus GetStatus(ReadOnlyMemory<byte> response)
+    {
+        if (response.Length < 5)
+        {
+            return TnfsStatus.Unknown;
+        }
+
+        return (TnfsStatus)response.Span[4];
+    }
+
+    private static void ValidateStatus(ReadOnlyMemory<byte> response, TnfsCommand command)
+    {
+        var status = GetStatus(response);
+        if (status != TnfsStatus.Ok)
+        {
+            throw new TnfsException($"TNFS {command} failed with status 0x{(byte)status:X2}", (byte)status);
+        }
+    }
+
     private void EnsureMounted()
     {
         if (!_mounted)
@@ -174,6 +370,23 @@ public sealed class TnfsClient : IAsyncDisposable
 }
 
 public readonly record struct TnfsMountResult(ushort ConnectionId, ushort ServerVersion, ushort MinRetryMilliseconds);
+
+public readonly record struct TnfsStat(
+    ushort Mode,
+    ushort Uid,
+    ushort Gid,
+    uint Size,
+    uint AccessTimeSeconds,
+    uint ModifiedTimeSeconds,
+    uint ChangeTimeSeconds)
+{
+    public bool IsDirectory => (Mode & 0xF000) == 0x4000;
+}
+
+public readonly record struct TnfsReadResult(bool IsEof, int BytesRead, ReadOnlyMemory<byte> Data)
+{
+    public static TnfsReadResult Eof => new(true, 0, ReadOnlyMemory<byte>.Empty);
+}
 
 public enum TnfsCommand : byte
 {
@@ -186,7 +399,7 @@ public enum TnfsCommand : byte
     SeekDir = 0x16,
     OpenDirX = 0x17,
     ReadDirX = 0x18,
-    Open = 0x20,
+    Open = 0x29,
     Read = 0x21,
     Write = 0x22,
     Close = 0x23,
@@ -206,4 +419,11 @@ public sealed class TnfsException : Exception
     }
 
     public byte StatusCode { get; }
+}
+
+public enum TnfsStatus : byte
+{
+    Ok = 0x00,
+    Eof = 0x21,
+    Unknown = 0xFF
 }
