@@ -1,14 +1,16 @@
 # RX8E Floppy Disk Drive
 
-The RX8E controller uses IOT codes in the 75x range:
+The RX8E controller uses device code 75 and the following IOTs:
 
- - 06751 (LCD) - Load Command and Unit
- - 06752 (XDR) - Transfer Data Register
- - 06753 (STR) - Skip on Transfer Ready
- - 06754 (SER) - Skip on Error
- - 06755 (SDN) - Skip on Done
- - 06756 (INTR) - Initialize and Read Status
- - 06757 (INIT) - Initialize (reset) device
+| IOT (octal) | Mnemonic | Description |
+| --- | --- | --- |
+| 06751 | LCD | Load command: first LCD loads sector and flags, second LCD loads track |
+| 06752 | XDR | Transfer data word to/from AC |
+| 06753 | STR | Skip on transfer ready |
+| 06754 | SER | Skip on error |
+| 06755 | SDN | Skip on done |
+| 06756 | INTR | Initialize and read status (starts I/O, returns status in AC) |
+| 06757 | INIT | Reset controller |
 
 ## Usage (in monitor)
 

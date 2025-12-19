@@ -1,17 +1,45 @@
 IOT quick reference
 ===================
 
-Console:
-  TTI (03) : keyboard input (KCF/KSF/KRS/KRB)
-  TTO (04) : console output (TCF/TSF/TLS)
+Console TTI (device 03)
 
-Line printer:
-  LPT (060) : uses IOTs 06601/06602/06604/06606 (output to attached file)
+  IOT    Mnemonic  Description
+  06031  KCF       Clear keyboard flag
+  06032  KSF       Skip if keyboard flag set
+  06034  KRS       Read keyboard buffer into AC low byte
+  06036  KRB       Read buffer and clear flag
 
-DECtape TC08:
-  Control device 076, Data device 077 (IOTs 6762/6764/6766/6771)
-  See help topic tc08 for monitor commands
+Console TTO (device 04)
 
-RX8E floppy:
-  Uses IOTs 06751-06757
-  See help topic rx8e for details
+  IOT    Mnemonic  Description
+  06041  TCF       Clear output flag
+  06042  TSF       Skip if output flag set
+  06044  TLS       Output AC low byte
+  06046  TLSC      Output and clear flag
+
+Line printer LPT (device 60)
+
+  IOT    Mnemonic  Description
+  06601  LPCF      Clear printer flag
+  06602  LPSF      Skip if printer flag set
+  06604  LPT       Output AC low byte to printer
+  06606  LPTC      Output and clear flag
+
+DECtape TC08 (control device 76, data device 77)
+
+  IOT    Mnemonic  Description
+  06762  DTCA      Clear transfer address
+  06764  DTSF      Skip if controller ready
+  06766  DTLB      Read block into memory at transfer address
+  06771  DTXA      Load transfer address from AC
+
+RX8E floppy (device 75)
+
+  IOT    Mnemonic  Description
+  06751  LCD       Load command and unit (sector on first load, track on second)
+  06752  XDR       Transfer word to/from AC
+  06753  STR       Skip on transfer ready
+  06754  SER       Skip on error
+  06755  SDN       Skip on done
+  06756  INTR      Initialize and read status
+  06757  INIT      Reset controller

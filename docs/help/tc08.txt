@@ -12,4 +12,11 @@ Block I/O:
     - args are octal
 
 IOT devices:
-  Control: device 076, Data: device 077 (e.g., DTSF 6764, DTLB 6766, DTXA 6771)
+  Control: device 076, Data: device 077
+
+IOT codes:
+  IOT    Mnemonic  Description
+  06762  DTCA      Clear transfer address
+  06764  DTSF      Skip if controller ready
+  06766  DTLB      Read block into memory at transfer address
+  06771  DTXA      Load transfer address from AC

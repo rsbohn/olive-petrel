@@ -12,12 +12,12 @@ Sector I/O:
     - track: 0-76, sector: 0-25, addr in octal
     - sectors are packed 12-bit words (64/128 words depending on density)
 
-IOT codes (075x):
-  06751 LCD   Load command: bits 0-4 sector, bit5=unit1, bit6=write
-              Second LCD loads track
-  06752 XDR   Transfer word (to/from AC)
-  06753 STR   Skip on transfer ready
-  06754 SER   Skip on error
-  06755 SDN   Skip on done
-  06756 INTR  Initialize and read status (starts I/O, returns status in AC)
-  06757 INIT  Reset device
+IOT codes (device 75):
+  IOT    Mnemonic  Description
+  06751  LCD       Load command: first LCD loads sector and flags, second loads track
+  06752  XDR       Transfer word (to/from AC)
+  06753  STR       Skip on transfer ready
+  06754  SER       Skip on error
+  06755  SDN       Skip on done
+  06756  INTR      Initialize and read status (starts I/O, returns status in AC)
+  06757  INIT      Reset device
