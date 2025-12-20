@@ -836,7 +836,7 @@ static void RunMachine(Pdp8 machine, List<string> args)
 
     machine.ClearHalt();
     var executed = machine.Run(maxSteps);
-    Console.WriteLine($"Executed {executed} step(s)." );
+    Console.WriteLine($"\nExecuted {executed} step(s)." );
     PrintRegisters(machine);
 }
 
