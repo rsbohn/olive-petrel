@@ -409,6 +409,13 @@ static void RxRead(Pdp8 machine, Rx8e rx8e, int drive, List<string> args)
     var buffer = new ushort[wordsPerSector];
     if (!rx8e.TryReadSector(drive, track, sector, buffer, out var error))
     {
+        var currentFail = addr & 0xFFF;
+        for (var i = 0; i < wordsPerSector; i++)
+        {
+            machine.Write(currentFail, 0);
+            currentFail = (currentFail + 1) & 0xFFF;
+        }
+
         Console.WriteLine($"Read failed: {error}");
         return;
     }

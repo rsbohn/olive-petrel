@@ -1,0 +1,92 @@
+/ load track 0 sector 0 from rx0
+    * 7600
+START,  CLL CLA
+    DCA FAIL
+    CLL CLA
+    DCA CMDS
+    CLL CLA
+    DCA TRACK
+    CLL CLA
+    DCA PTR
+    JMS READ_SECTOR
+    CLL CLA             / read size from 0000
+    TAD 0000
+    CMA IAC
+    DCA 0010            / save to counter
+LOOP,
+    CLL CLA
+    TAD FAIL
+    SZA
+    JMP EEND
+    ISZ 0010
+    JMP .+2
+    JMP BEND
+    ISZ CMDS
+    CLL
+    JMS DOT
+    JMS READ_SECTOR
+    JMP LOOP
+BEND,
+    CLA CLL
+    TAD CHR
+    JMS PUTCH
+    HLT
+    JMP I 0001
+EEND,
+    HLT             / user can fix the problem
+    JMP START       / then 'run'
+
+HERE,   .
+CMDS,   0
+TRACK,  0
+PTR,    0
+FAIL,   0
+
+READ_SECTOR, 0
+    CLA CLL
+    TAD CMDS
+    IOT 6751    / load sector/unit
+    CLA CLL
+    TAD TRACK
+    IOT 6751    / load track
+
+RSX0, CLA CLL
+    IOT 6756
+RSX1,           / wait for ready
+    IOT 6754    / skip if error RxSer
+    JMP .+2
+    JMP RS_ERROR
+    IOT 6753    / skip if transfer ready
+    JMP RSX1
+RSX2,           / xfer loop
+    IOT 6752
+    DCA I PTR
+    ISZ PTR
+    IOT 6755
+    JMP RSX2
+    CLA CLL
+    JMP I READ_SECTOR
+
+RS_ERROR,
+    CLA CLL CMA
+    DCA FAIL
+    CLA CLL
+    TAD ERRCH
+    JMS PUTCH
+    CLA CLL IAC
+    JMP I READ_SECTOR
+
+DOT,    0
+    CLA CLL
+    TAD CHDOT
+    JMS PUTCH
+    JMP I DOT
+
+PUTCH,  0
+    AND CMASK
+    IOT 6046
+    JMP I PUTCH
+CHR,    0122
+CHDOT,  0056
+ERRCH,  0077
+CMASK,  0177

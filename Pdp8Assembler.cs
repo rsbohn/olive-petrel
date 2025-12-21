@@ -182,7 +182,7 @@ public sealed class Pdp8Assembler
             {
                 try
                 {
-                    location = Convert.ToInt32(stripped[1..], 8);
+                    location = Convert.ToInt32(stripped[1..].Trim(), 8);
                 }
                 catch (Exception ex)
                 {

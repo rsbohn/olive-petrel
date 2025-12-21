@@ -21,9 +21,7 @@ Thumbs.db
 publish/
 
 # media images (local artifacts)
-*.tu56
-*.rx01
-*.rx02
+media/
 sd/
 
 # cores
