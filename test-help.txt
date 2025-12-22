@@ -1,0 +1,6 @@
+.a
+
+help
+q
+n
+quit

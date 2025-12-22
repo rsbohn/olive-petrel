@@ -1,0 +1,129 @@
+Interactive Assembler
+=====================
+
+The interactive assembler allows you to enter PDP-8 assembly instructions
+one line at a time with immediate feedback showing the assembled machine code.
+
+Starting the Assembler
+----------------------
+  .a                  Start interactive assembler (prompts for start address)
+  .a <file>           Assemble a file (normal file-based assembly)
+
+Basic Usage
+-----------
+Enter instructions at the address prompt. Each instruction shows:
+  - Address where assembled
+  - Octal machine code
+  - Disassembled mnemonic
+
+Example:
+  0200? CLA CLL
+  0200: 7300 CLA CLL
+  0201? TAD 0007
+  0201: 1007 TAD 0007
+
+Supported Instructions
+----------------------
+Memory Reference:
+  AND <addr>          Bitwise AND
+  TAD <addr>          Two's complement Add
+  ISZ <addr>          Increment and Skip if Zero
+  DCA <addr>          Deposit and Clear Accumulator
+  JMS <addr>          Jump to Subroutine
+  JMP <addr>          Jump
+  
+  Add 'I' for indirect: JMP I 0010
+
+Operate Group 1:
+  CLA CLL CMA CML     Accumulator and Link operations
+  RAR RAL RTR RTL     Rotate operations
+  BSW                 Byte swap
+  IAC                 Increment AC
+  
+  Combine multiple: CLA CLL
+
+Operate Group 2:
+  SMA SZA SNL         Skip on conditions
+  SPA SNA SZL         Skip on conditions
+  CLA OSR HLT         Other operations
+  ION IOFF            Interrupt control
+  
+  Combine with CLA: SZA HLT
+
+IOT Instructions:
+  IOT <code>          I/O Transfer (e.g., IOT 6046)
+  <octal>             Direct octal (e.g., 6046)
+
+Data Constants:
+  <octal>             Octal number (e.g., 1234)
+  0x<hex>             Hex number (e.g., 0x1FF)
+  #<decimal>          Decimal number (e.g., #100)
+  "X"                 Character literal (e.g., "A")
+
+Labels and Symbols
+------------------
+Define labels with a comma:
+  0200? LOOP, CLA
+  0200: 7200 CLA
+  
+Reference labels:
+  0201? JMP LOOP
+  0201: 5200 JMP 0200
+
+Label arithmetic:
+  TAD LOOP+1          Add offset to label
+  DCA START-2         Subtract from label
+
+Interactive Commands
+--------------------
+  help or ?           Show this help
+  .list               Display all assembled memory
+  .symbols or =       Show symbol table
+  .load               Load code into machine memory
+  .clear              Clear memory and symbols
+  <octal>             Set current address (e.g., 300)
+  q, quit, exit       Exit assembler (prompts to load if needed)
+
+Tips
+----
+- Errors are displayed but don't terminate the session
+- Page addressing: targets must be on current page or zero page
+- Forward references work but may need re-assembly after label defined
+- Use .load during session or answer 'y' when prompted on exit to
+  transfer assembled code to machine memory
+- After loading, use 'pc <addr>' to set program counter before running
+
+Example Session
+---------------
+  > .a
+  Start address [0200]? 
+  0200? CLA CLL
+  0200: 7300 CLA CLL
+  0201? TAD LIMIT
+  0201: 1007 TAD 0007
+  0202? LOOP, ISZ COUNT
+  0202: 2010 ISZ 0010
+  0203? JMP LOOP
+  0203: 5202 JMP 0202
+  0204? HLT
+  0204: 7402 HLT
+  0205? 0007
+  Error: Unknown instruction or symbol '0007'
+  0205? 7
+  0205: 0007 0007
+  0206? LIMIT, 7
+  0206: 0007 0007
+  0207? COUNT, 0
+  0207: 0000 0000
+  0210? .symbols
+  Symbols:
+    COUNT        = 0207
+    LIMIT        = 0206
+    LOOP         = 0202
+  0210? q
+  Load assembled code into machine memory? (y/n) y
+  Loaded into machine memory.
+  > pc 0200
+  PC set to 0200
+  > run
+  ...

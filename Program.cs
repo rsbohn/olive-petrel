@@ -45,7 +45,16 @@ while (true)
             break;
         case ".a":
         case "a":
-            AssembleFile(commandArgs);
+            if (commandArgs.Count == 1)
+            {
+                // No arguments - start interactive assembler
+                StartInteractiveAssembler(machine);
+            }
+            else
+            {
+                // File assembly
+                AssembleFile(commandArgs);
+            }
             break;
         case "tnfs":
             StartTnfsShell();
@@ -787,6 +796,175 @@ static void AssembleFile(List<string> args)
     catch (Exception ex)
     {
         Console.WriteLine($"Assembly error: {ex.Message}");
+    }
+}
+
+static void StartInteractiveAssembler(Pdp8 machine)
+{
+    Console.WriteLine("Interactive Assembler");
+    Console.WriteLine("Commands: help, q=quit, .list, .symbols, .load, .clear");
+    Console.WriteLine();
+    
+    var startAddr = Convert.ToInt32("0200", 8);
+    Console.Write("Start address [0200]? ");
+    var startInput = Console.ReadLine();
+    if (!string.IsNullOrWhiteSpace(startInput))
+    {
+        try
+        {
+            startAddr = Convert.ToInt32(startInput.Trim(), 8);
+        }
+        catch
+        {
+            Console.WriteLine("Invalid address, using 0200");
+            startAddr = Convert.ToInt32("0200", 8);
+        }
+    }
+    
+    var assembler = new InteractiveAssembler(machine, startAddr);
+    
+    while (true)
+    {
+        var addr = assembler.CurrentAddress;
+        Console.Write($"{Convert.ToString(addr, 8).PadLeft(4, '0')}? ");
+        
+        var line = Console.ReadLine();
+        if (line is null)
+        {
+            break;
+        }
+        
+        line = line.Trim();
+        
+        if (string.IsNullOrEmpty(line))
+        {
+            continue;
+        }
+        
+        // Check for quit commands
+        if (line.Equals("q", StringComparison.OrdinalIgnoreCase) ||
+            line.Equals("quit", StringComparison.OrdinalIgnoreCase) ||
+            line.Equals("exit", StringComparison.OrdinalIgnoreCase))
+        {
+            // Check if there's unloaded code
+            if (assembler.HasUnloadedCode && assembler.Memory.Count > 0)
+            {
+                Console.Write("Load assembled code into machine memory? (y/n) ");
+                var response = Console.ReadLine();
+                if (response != null && response.Trim().Equals("y", StringComparison.OrdinalIgnoreCase))
+                {
+                    assembler.LoadIntoMachine();
+                    Console.WriteLine("Loaded into machine memory.");
+                }
+            }
+            break;
+        }
+        
+        // Check for special commands
+        if (line.Equals(".list", StringComparison.OrdinalIgnoreCase))
+        {
+            assembler.ListMemory();
+            continue;
+        }
+        
+        if (line.Equals("help", StringComparison.OrdinalIgnoreCase) ||
+            line.Equals("?", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowInteractiveAssemblerHelp();
+            continue;
+        }
+        
+        if (line.Equals(".symbols", StringComparison.OrdinalIgnoreCase) ||
+            line.Equals("=", StringComparison.OrdinalIgnoreCase))
+        {
+            assembler.ListSymbols();
+            continue;
+        }
+        
+        if (line.Equals(".load", StringComparison.OrdinalIgnoreCase))
+        {
+            assembler.LoadIntoMachine();
+            Console.WriteLine("Loaded into machine memory.");
+            continue;
+        }
+        
+        if (line.Equals(".clear", StringComparison.OrdinalIgnoreCase))
+        {
+            assembler.Clear();
+            Console.WriteLine("Memory cleared.");
+            continue;
+        }
+        
+        // Check for address change (just a number)
+        if (line.All(c => char.IsDigit(c)))
+        {
+            try
+            {
+                var newAddr = Convert.ToInt32(line, 8);
+                assembler.SetAddress(newAddr);
+                Console.WriteLine($"Address set to {Convert.ToString(newAddr, 8).PadLeft(4, '0')}");
+            }
+            catch
+            {
+                Console.WriteLine("Invalid address.");
+            }
+            continue;
+        }
+        
+        // Try to assemble the line
+        try
+        {
+            var (word, disasm) = assembler.ParseAndAssemble(line);
+            assembler.StoreAndAdvance(word);
+            
+            // Show the assembled result
+            var wordOctal = Convert.ToString(word, 8).PadLeft(4, '0');
+            Console.WriteLine($"{Convert.ToString(addr, 8).PadLeft(4, '0')}: {wordOctal} {disasm}");
+        }
+        catch (AsmError ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+    }
+    
+    Console.WriteLine();
+}
+
+static void ShowInteractiveAssemblerHelp()
+{
+    var helpPath = Path.Combine(HelpDirectory, "assembler.txt");
+    if (File.Exists(helpPath))
+    {
+        var content = File.ReadAllText(helpPath);
+        Console.WriteLine(content);
+    }
+    else
+    {
+        Console.WriteLine("Interactive Assembler Help");
+        Console.WriteLine("=========================");
+        Console.WriteLine();
+        Console.WriteLine("Commands:");
+        Console.WriteLine("  help, ?         Show this help");
+        Console.WriteLine("  .list           Display all assembled memory");
+        Console.WriteLine("  .symbols, =     Show symbol table");
+        Console.WriteLine("  .load           Load code into machine memory");
+        Console.WriteLine("  .clear          Clear memory and symbols");
+        Console.WriteLine("  <octal>         Set current address");
+        Console.WriteLine("  q, quit, exit   Exit assembler");
+        Console.WriteLine();
+        Console.WriteLine("Instructions:");
+        Console.WriteLine("  Memory Ref: AND TAD ISZ DCA JMS JMP [I] <addr>");
+        Console.WriteLine("  Operate G1: CLA CLL CMA CML RAR RAL RTR RTL BSW IAC");
+        Console.WriteLine("  Operate G2: SMA SZA SNL SPA SNA SZL CLA OSR HLT ION IOFF");
+        Console.WriteLine("  IOT:        IOT <code> or direct octal");
+        Console.WriteLine("  Data:       <octal>, 0x<hex>, #<decimal>, \"<char>\"");
+        Console.WriteLine();
+        Console.WriteLine("Labels: LABEL, <instruction>");
+        Console.WriteLine("See docs/interactive-assembler.md for full documentation.");
     }
 }
 
