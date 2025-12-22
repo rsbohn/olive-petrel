@@ -13,6 +13,7 @@ var machine = new Pdp8();
 var tc08 = new Tc08();
 var linePrinter = new LinePrinter();
 var rx8e = new Rx8e();
+var helpSystem = new HelpSystem(HelpDirectory);
 machine.LinePrinter = linePrinter;
 machine.Rx8e = rx8e;
 machine.Tc08 = tc08;
@@ -40,7 +41,7 @@ while (true)
         case "help":
         case ".help":
         case "h":
-            StartHelpShell();
+            helpSystem.StartHelpShell();
             break;
         case ".a":
         case "a":
@@ -1452,177 +1453,6 @@ static async Task StartTnfsShellAsync()
         var major = version >> 8;
         var minor = version & 0xFF;
         return $"{major}.{minor}";
-    }
-}
-
-static void StartHelpShell()
-{
-    var helpDir = Path.GetFullPath(HelpDirectory);
-    if (!Directory.Exists(helpDir))
-    {
-        Console.WriteLine($"Help directory not found: {helpDir}");
-        return;
-    }
-
-    Console.WriteLine("Help shell. Type a topic to view, 'list' to list topics, or 'exit' to return.");
-    var topics = LoadHelpTopics();
-    while (true)
-    {
-        ShowHelpShortcuts(topics);
-        Console.Write("help> ");
-        var line = Console.ReadLine();
-        if (line is null)
-        {
-            break;
-        }
-
-        var trimmed = line.Trim();
-        if (trimmed.Length == 0 || trimmed.Equals("exit", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("quit", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.Equals("back", StringComparison.OrdinalIgnoreCase))
-        {
-            break;
-        }
-
-        var parts = SplitCommand(trimmed);
-        if (parts.Count == 0)
-        {
-            continue;
-        }
-
-        var command = parts[0].ToLowerInvariant();
-        if (command == "list" || command == "ls" || command == "?")
-        {
-            ListTopics();
-            continue;
-        }
-
-        if (command == "q" || command == "quit" || command == "exit" || command == "back")
-        {
-            break;
-        }
-
-        var topic = ResolveTopic(parts[0]);
-        if (topic is null)
-        {
-            Console.WriteLine("Topic not found.");
-            continue;
-        }
-
-        try
-        {
-            foreach (var helpLine in File.ReadLines(topic.Value.Path))
-            {
-                Console.WriteLine(helpLine);
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to read help: {ex.Message}");
-        }
-    }
-
-    List<(string Name, string Shortcut, string Path)> LoadHelpTopics()
-    {
-        var items = new List<(string, string, string)>();
-        var files = Directory.GetFiles(helpDir);
-        var usedShortcuts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in files)
-        {
-            var name = Path.GetFileNameWithoutExtension(file);
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                continue;
-            }
-
-            var lowerName = name.ToLowerInvariant();
-            var shortcut = MakeShortcut(lowerName, usedShortcuts);
-            usedShortcuts.Add(shortcut);
-            items.Add((lowerName, shortcut, file));
-        }
-
-        return items;
-    }
-
-    static string MakeShortcut(string name, HashSet<string> used)
-    {
-        for (var len = 1; len <= name.Length; len++)
-        {
-            var candidate = name.Substring(0, len);
-            if (!used.Contains(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        var suffix = 2;
-        while (true)
-        {
-            var candidate = name + suffix.ToString(CultureInfo.InvariantCulture);
-            if (!used.Contains(candidate))
-            {
-                return candidate;
-            }
-
-            suffix++;
-        }
-    }
-
-    void ShowHelpShortcuts(List<(string Name, string Shortcut, string Path)> list)
-    {
-        if (list.Count == 0)
-        {
-            return;
-        }
-
-        var parts = list.Select(t => $"{t.Shortcut}:{t.Name}");
-        var line = string.Join(' ', parts);
-        Console.WriteLine($"{line} q:quit help");
-    }
-
-    void ListTopics()
-    {
-        if (topics.Count == 0)
-        {
-            Console.WriteLine("No help topics found.");
-            return;
-        }
-
-        Console.WriteLine("Topics:");
-        foreach (var t in topics)
-        {
-            Console.WriteLine($"  {t.Name} ({t.Shortcut})");
-        }
-    }
-
-    (string Name, string Shortcut, string Path)? ResolveTopic(string topic)
-    {
-        var lower = topic.ToLowerInvariant();
-        var exact = topics.FirstOrDefault(t => t.Name == lower);
-        if (exact != default)
-        {
-            return exact;
-        }
-
-        var exactShortcut = topics.FirstOrDefault(t => t.Shortcut == lower);
-        if (exactShortcut != default)
-        {
-            return exactShortcut;
-        }
-
-        var nameMatches = topics.Where(t => t.Name.StartsWith(lower, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (nameMatches.Count == 1)
-        {
-            return nameMatches[0];
-        }
-
-        var shortcutMatches = topics.Where(t => t.Shortcut.StartsWith(lower, StringComparison.OrdinalIgnoreCase)).ToList();
-        if (shortcutMatches.Count == 1)
-        {
-            return shortcutMatches[0];
-        }
-
-        return null;
     }
 }
 

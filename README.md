@@ -29,7 +29,7 @@ Type 'help' for commands.
 ## Monitor commands (quick reference)
 
 General:
-- `help` or `.help` open the help shell (topics in `docs/help`)
+- `help` or `.help` open the help shell (topics in `docs/help`); inside the shell try `menu`, `search <word>`, or `random`
 - `regs` show registers
 - `mem <addr> [count]` dump memory (octal)
 - `dep <addr> <word|string>..` deposit octal words or ASCII strings
