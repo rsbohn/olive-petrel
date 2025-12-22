@@ -802,7 +802,7 @@ static void AssembleFile(List<string> args)
 static void StartInteractiveAssembler(Pdp8 machine)
 {
     Console.WriteLine("Interactive Assembler");
-    Console.WriteLine("Commands: help, q=quit, .list, .symbols, .load, .clear");
+    Console.WriteLine("Commands: help, q=quit, .list, .symbols, .u/.update, .clear");
     Console.WriteLine();
     
     var startAddr = Convert.ToInt32("0200", 8);
@@ -849,12 +849,12 @@ static void StartInteractiveAssembler(Pdp8 machine)
             // Check if there's unloaded code
             if (assembler.HasUnloadedCode && assembler.Memory.Count > 0)
             {
-                Console.Write("Load assembled code into machine memory? (y/n) ");
+                Console.Write("Update machine memory with assembled code? (y/n) ");
                 var response = Console.ReadLine();
                 if (response != null && response.Trim().Equals("y", StringComparison.OrdinalIgnoreCase))
                 {
                     assembler.LoadIntoMachine();
-                    Console.WriteLine("Loaded into machine memory.");
+                    Console.WriteLine("Updated machine memory.");
                 }
             }
             break;
@@ -881,10 +881,11 @@ static void StartInteractiveAssembler(Pdp8 machine)
             continue;
         }
         
-        if (line.Equals(".load", StringComparison.OrdinalIgnoreCase))
+        if (line.Equals(".update", StringComparison.OrdinalIgnoreCase) ||
+            line.Equals(".u", StringComparison.OrdinalIgnoreCase))
         {
             assembler.LoadIntoMachine();
-            Console.WriteLine("Loaded into machine memory.");
+            Console.WriteLine("Updated machine memory.");
             continue;
         }
         
@@ -951,7 +952,7 @@ static void ShowInteractiveAssemblerHelp()
         Console.WriteLine("  help, ?         Show this help");
         Console.WriteLine("  .list           Display all assembled memory");
         Console.WriteLine("  .symbols, =     Show symbol table");
-        Console.WriteLine("  .load           Load code into machine memory");
+        Console.WriteLine("  .update, .u     Update machine memory with assembled code");
         Console.WriteLine("  .clear          Clear memory and symbols");
         Console.WriteLine("  <octal>         Set current address");
         Console.WriteLine("  q, quit, exit   Exit assembler");

@@ -148,14 +148,14 @@ Symbols:
   LOOP         = 0200
 ```
 
-### `.load` - Load to Machine
+### `.update` or `.u` - Update Machine Memory
 Transfer assembled code into the emulator's memory:
 ```
-0203? .load
-Loaded into machine memory.
+0203? .update
+Updated machine memory.
 ```
 
-After loading, you can exit the interactive assembler and run your code with commands like `g` (go) or `s` (step).
+After updating, you can exit the interactive assembler and run your code with commands like `g` (go) or `s` (step).
 
 ### `.clear` - Reset Session
 Clear all assembled memory and user-defined symbols:
@@ -176,12 +176,12 @@ Address set to 0300
 Exit the interactive assembler with `q`, `quit`, or `exit`:
 ```
 0200? q
-Load assembled code into machine memory? (y/n) y
-Loaded into machine memory.
+Update machine memory with assembled code? (y/n) y
+Updated machine memory.
 >
 ```
 
-If you've assembled code that hasn't been loaded yet, you'll be prompted to load it before exiting.
+If you've assembled code that hasn't been updated yet, you'll be prompted to update it before exiting.
 
 ## Example Session
 
@@ -211,8 +211,8 @@ Memory [0200-0204]:
 0205? .symbols
 Symbols:
   LOOP         = 0202
-0205? .load
-Loaded into machine memory.
+0205? .update
+Updated machine memory.
 0205? q
 > pc 0200
 PC set to 0200
@@ -230,3 +230,4 @@ PC set to 0200
 4. **Comments**: Use `/` to add comments (not currently supported in interactive mode, use file assembly for commented code).
 
 5. **Pseudo-ops**: Symbols defined in file assemblies (with `=`) are available in the interactive assembler.
+7. **Update Memory**: Use `.update` or `.u` to transfer code to machine memory, or answer 'y' when prompted on exit.

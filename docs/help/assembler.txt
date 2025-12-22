@@ -79,19 +79,19 @@ Interactive Commands
   help or ?           Show this help
   .list               Display all assembled memory
   .symbols or =       Show symbol table
-  .load               Load code into machine memory
+  .update or .u       Update machine memory with assembled code
   .clear              Clear memory and symbols
   <octal>             Set current address (e.g., 300)
-  q, quit, exit       Exit assembler (prompts to load if needed)
+  q, quit, exit       Exit assembler (prompts to update if needed)
 
 Tips
 ----
 - Errors are displayed but don't terminate the session
 - Page addressing: targets must be on current page or zero page
 - Forward references work but may need re-assembly after label defined
-- Use .load during session or answer 'y' when prompted on exit to
+- Use .update/.u during session or answer 'y' when prompted on exit to
   transfer assembled code to machine memory
-- After loading, use 'pc <addr>' to set program counter before running
+- After updating, use 'pc <addr>' to set program counter before running
 
 Example Session
 ---------------
@@ -121,8 +121,8 @@ Example Session
     LIMIT        = 0206
     LOOP         = 0202
   0210? q
-  Load assembled code into machine memory? (y/n) y
-  Loaded into machine memory.
+  Update machine memory with assembled code? (y/n) y
+  Updated machine memory.
   > pc 0200
   PC set to 0200
   > run
