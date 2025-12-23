@@ -27,4 +27,5 @@ Devices:
   rx0|rx1 read <track> <sector> <addr>   Read a sector into memory
   rx0|rx1 write <track> <sector> <addr>  Write a sector from memory
   lpt att|attach <file>              Attach a line printer output file
+  tti read <file>                    Feed a file to TTI (EOF marker 0377)
   watchdog restart                   Restart the watchdog (placeholder)

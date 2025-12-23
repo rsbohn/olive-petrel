@@ -3,6 +3,7 @@ namespace OlivePetrel;
 public sealed class Pdp8
 {
     public const int MemorySize = 4096;
+    public const byte DefaultTtiEofMarker = 0xFF;
 
     private static readonly ushort Kcf = OctalConstant("06031");
     private static readonly ushort Ksf = OctalConstant("06032");
@@ -29,7 +30,10 @@ public sealed class Pdp8
     private static readonly ushort RxInit = OctalConstant("06757");
 
     private readonly ushort[] _memory = new ushort[MemorySize];
+    private readonly Queue<byte> _ttyInputQueue = new();
     private bool _ttyOutputReady = true;
+    private bool _ttyInputEofPending;
+    private byte _ttyInputEofMarker = DefaultTtiEofMarker;
     private int _tc08TransferAddress;
     private bool _tc08Ready;
 
@@ -63,8 +67,23 @@ public sealed class Pdp8
         Link = false;
         Halted = false;
         _ttyOutputReady = true;
+        _ttyInputQueue.Clear();
+        _ttyInputEofPending = false;
+        _ttyInputEofMarker = DefaultTtiEofMarker;
         _tc08Ready = false;
         _tc08TransferAddress = 0;
+    }
+
+    public void LoadTtiInput(byte[] data, byte? eofMarker = null)
+    {
+        _ttyInputQueue.Clear();
+        foreach (var value in data)
+        {
+            _ttyInputQueue.Enqueue(value);
+        }
+
+        _ttyInputEofMarker = eofMarker ?? DefaultTtiEofMarker;
+        _ttyInputEofPending = true;
     }
 
     public ushort Read(int address)
@@ -756,8 +775,13 @@ public sealed class Pdp8
         return 0;
     }
 
-    private static bool TryKeyAvailable()
+    private bool TryKeyAvailable()
     {
+        if (_ttyInputQueue.Count > 0 || _ttyInputEofPending)
+        {
+            return true;
+        }
+
         try
         {
             return Console.KeyAvailable;
@@ -768,9 +792,22 @@ public sealed class Pdp8
         }
     }
 
-    private static bool TryReadKey(out int key)
+    private bool TryReadKey(out int key)
     {
         key = 0;
+        if (_ttyInputQueue.Count > 0)
+        {
+            key = _ttyInputQueue.Dequeue();
+            return true;
+        }
+
+        if (_ttyInputEofPending)
+        {
+            key = _ttyInputEofMarker;
+            _ttyInputEofPending = false;
+            return true;
+        }
+
         try
         {
             if (!Console.KeyAvailable)

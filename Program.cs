@@ -231,6 +231,9 @@ static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrin
     var device = args[0].ToLowerInvariant();
     switch (device)
     {
+        case "tti":
+            HandleTtiCommand(machine, args);
+            return true;
         case "dt0":
         case "dt1":
             HandleTc08Device(machine, tc08, args);
@@ -248,6 +251,42 @@ static bool TryHandleDeviceCommand(Pdp8 machine, Tc08 tc08, LinePrinter linePrin
         default:
             return false;
     }
+}
+
+static void HandleTtiCommand(Pdp8 machine, List<string> args)
+{
+    if (args.Count < 2)
+    {
+        Console.WriteLine("Usage: tti read <file>");
+        return;
+    }
+
+    var deviceCommand = args[1].ToLowerInvariant();
+    if (deviceCommand == "read")
+    {
+        if (args.Count < 3)
+        {
+            Console.WriteLine("Usage: tti read <file>");
+            return;
+        }
+
+        var path = string.Join(' ', args.GetRange(2, args.Count - 2));
+        try
+        {
+            var data = File.ReadAllBytes(path);
+            machine.LoadTtiInput(data);
+            Console.WriteLine(
+                $"TTI reading {data.Length} byte(s) from {path} (EOF={Pdp8.ToOctal(Pdp8.DefaultTtiEofMarker, 4)}).");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"TTI read failed: {ex.Message}");
+        }
+
+        return;
+    }
+
+    Console.WriteLine("Unknown TTI command. Use read.");
 }
 
 static void HandleTc08Device(Pdp8 machine, Tc08 tc08, List<string> args)
