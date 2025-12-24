@@ -9,13 +9,13 @@ It also includes a TNFS client for loading files over the network.
 Requires .NET 9 SDK.
 
 ```bash
-dotnet build
+dotnet build src/OlivePetrel.csproj
 ```
 
 ## Run
 
 ```bash
-dotnet run
+dotnet run --project src/OlivePetrel.csproj
 ```
 
 You should see a prompt like:

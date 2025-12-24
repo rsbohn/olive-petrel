@@ -1,0 +1,8 @@
+* 0200
+START,  CLA CLL
+        TAD VALUE
+        JMS I OCTOPRINT_PTR
+        HLT
+
+VALUE,  0777
+OCTOPRINT_PTR, LINK OCTOPRINT / filled by bin/link.sh using lib.sym
