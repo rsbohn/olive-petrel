@@ -1,0 +1,51 @@
+/ OCTOPRINT - print AC as 4-digit octal to console TTO
+/ Entry: AC = value to print (12-bit)
+/ Exit:  AC, L clobbered
+/ Uses:  TEMP
+/ Output: ASCII digits to console (TTO device 04)
+
+OCTOPRINT, 0
+    DCA TEMP
+    CLA CLL
+    TAD TEMP
+    BSW CLL
+    RAR
+    RAR
+    RAR
+    AND MASK
+    TAD ASCII0
+    JMS PUTCH
+    CLA CLL
+    TAD TEMP
+    BSW
+    AND MASK
+    TAD ASCII0
+    JMS PUTCH
+    CLA CLL
+    TAD TEMP
+    CLL
+    RAR
+    RAR
+    RAR
+    AND MASK
+    TAD ASCII0
+    JMS PUTCH
+    CLA CLL
+    TAD TEMP
+    AND MASK
+    TAD ASCII0
+    JMS PUTCH
+    JMP I OCTOPRINT
+
+PUTCH, 0
+    AND CMASK
+PUTWAIT,
+    IOT 6042    / TSF
+    JMP PUTWAIT
+    IOT 6044    / TLS
+    JMP I PUTCH
+
+TEMP,   0
+ASCII0, 0060
+CMASK,  0177
+MASK,   0007

@@ -1,0 +1,24 @@
+CAL3 - Minimal calendar printer
+
+cal3 prints a single month calendar for a selected year and month.
+It writes to the console TTO (device 04) and halts when done.
+
+Build and run
+  .a sd/cal3.pa sd/cal3.srec
+  load sd/cal3.srec
+  pc 0200
+  run
+
+Inputs (octal memory)
+  YEAR_IN  = 02000  ; year, octal (valid range 1957-2099 decimal)
+  MONTH_IN = 02001  ; month, octal (1-12)
+
+Example: May 2024
+  dep 02000 3750    ; 2024 decimal = 3750 octal
+  dep 02001 0005
+  pc 0200
+  run
+
+Notes
+  - Invalid inputs print "???" and halt.
+  - Output includes the year, month name, weekday of the 1st, and a grid.
