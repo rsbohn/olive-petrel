@@ -1,0 +1,5 @@
+{"id":"stack-001","title":"Monitor maintains a stack at 0020-0027 with SP at 0030.","status":"done","created":"2026-02-10","updated":"2026-02-10"}
+{"id":"stack-002","title":"A bare octal word in the monitor input stream is pushed to the stack.","status":"done","created":"2026-02-10","updated":"2026-02-10"}
+{"id":"stack-003","title":"Monitor commands: \"stack\" -- show stack and SP. \".\" -- pop and print TOS as (octal)","status":"done","created":"2026-02-10","updated":"2026-02-10"}
+{"id":"stack-004","title":"More stack commands: + - and or not","status":"done","created":"2026-02-10","updated":"2026-02-10"}
+{"id":"stack-005","title":"Stack operators: @ (get) and ! (put)","status":"done","created":"2026-02-10","updated":"2026-02-10"}

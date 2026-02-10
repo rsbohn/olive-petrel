@@ -6,6 +6,7 @@ General:
   tnfs                Open TNFS subshell (mount/list/get/umount/status)
   regs                Show registers
   mem <addr> [count]  Dump memory (octal)
+  x <addr> [count]    alias for 'mem'
   dep <addr> <word|string>.. Deposit octal words or ASCII strings
   load <file>         Load a simple octal image (auto-detects S-records)
   .a <src.pa> [dest]  Assemble PAL source to an S-record file
@@ -15,7 +16,19 @@ General:
   run [max]           Run up to max instructions (default 100000)
   trace [count]       Step and show registers after each instruction
   reset               Clear memory and registers
+  stack               Show monitor stack and SP
+  .                   Pop and print the top of the monitor stack
+  +                   Pop two values, push sum (12-bit)
+  -                   Pop two values, push difference (12-bit)
+  @                   Replace TOS with memory at address TOS
+  !                   Pop value and address, store value at address
+  and                 Pop two values, push bitwise AND (12-bit)
+  or                  Pop two values, push bitwise OR (12-bit)
+  not                 Pop one value, push bitwise NOT (12-bit)
   quit                Exit the emulator
+
+Input shortcuts:
+  <octal>             Push a bare octal word onto the monitor stack
 
 Devices:
   show dev            Show attached devices

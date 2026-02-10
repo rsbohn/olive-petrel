@@ -8,6 +8,9 @@ const int TtoDevice = 4;
 const int Tc08ControlDevice = 8;
 const int Tc08DataDevice = 9;
 const string HelpDirectory = "docs/help";
+const int StackBaseAddress = 16; // 0020
+const int StackTopAddress = 23;  // 0027
+const int StackSpAddress = 24;   // 0030
 
 var machine = new Pdp8();
 var tc08 = new Tc08();
@@ -19,6 +22,7 @@ machine.Rx8e = rx8e;
 machine.Tc08 = tc08;
 Console.WriteLine("Olive Petrel PDP-8 Emulator");
 Console.WriteLine("Type 'help' for commands.");
+InitializeMonitorStack(machine);
 
 while (true)
 {
@@ -33,6 +37,55 @@ while (true)
     if (commandArgs.Count == 0)
     {
         continue;
+    }
+
+    var handledInlineStack = false;
+    var commandStart = commandArgs.Count;
+    for (var i = 0; i < commandArgs.Count; i++)
+    {
+        var token = commandArgs[i];
+        if (TryParseOctal(token, out var stackValue))
+        {
+            var sp = PushStack(machine, stackValue);
+            Console.WriteLine($"Pushed {Pdp8.ToOctal(stackValue, 4)} (SP={Pdp8.ToOctal(sp, 4)})");
+            handledInlineStack = true;
+            continue;
+        }
+
+        if (token == ".")
+        {
+            var value = PopStack(machine);
+            Console.WriteLine(Pdp8.ToOctal(value, 4));
+            handledInlineStack = true;
+            continue;
+        }
+
+        if (token.Equals("stack", StringComparison.OrdinalIgnoreCase))
+        {
+            ShowStack(machine);
+            handledInlineStack = true;
+            continue;
+        }
+
+        if (IsStackOperator(token))
+        {
+            ExecuteStackOperator(machine, token);
+            handledInlineStack = true;
+            continue;
+        }
+
+        commandStart = i;
+        break;
+    }
+
+    if (handledInlineStack && commandStart >= commandArgs.Count)
+    {
+        continue;
+    }
+
+    if (commandStart > 0)
+    {
+        commandArgs = commandArgs.GetRange(commandStart, commandArgs.Count - commandStart);
     }
 
     var command = commandArgs[0].ToLowerInvariant();
@@ -65,12 +118,14 @@ while (true)
             return;
         case "reset":
             machine.Reset();
+            InitializeMonitorStack(machine);
             Console.WriteLine("Reset complete.");
             break;
         case "regs":
             PrintRegisters(machine);
             break;
         case "mem":
+        case "x":
             DumpMemory(machine, commandArgs);
             break;
         case "dep":
@@ -98,6 +153,13 @@ while (true)
             break;
         case "trace":
             TraceMachine(machine, commandArgs);
+            break;
+        case "stack":
+            ShowStack(machine);
+            break;
+        case ".":
+            var value = PopStack(machine);
+            Console.WriteLine(Pdp8.ToOctal(value, 4));
             break;
         default:
             if (TryHandleDeviceCommand(machine, tc08, linePrinter, rx8e, commandArgs))
@@ -152,6 +214,146 @@ static void PrintRegisters(Pdp8 machine)
         $"PC={Pdp8.ToOctal(machine.PC, 4)} AC={Pdp8.ToOctal(machine.AC, 4)} " +
         $"MQ={Pdp8.ToOctal(machine.MQ, 4)} L={(machine.Link ? 1 : 0)} IR={Pdp8.ToOctal(machine.IR, 4)} " +
         $"HLT={(machine.Halted ? 1 : 0)}");
+}
+
+static void InitializeMonitorStack(Pdp8 machine)
+{
+    for (var addr = StackBaseAddress; addr <= StackTopAddress; addr++)
+    {
+        machine.Write(addr, 0);
+    }
+
+    machine.Write(StackSpAddress, StackBaseAddress);
+}
+
+static int ReadStackPointer(Pdp8 machine)
+{
+    var sp = machine.Read(StackSpAddress);
+    if (sp < StackBaseAddress || sp > StackTopAddress)
+    {
+        sp = StackBaseAddress;
+        machine.Write(StackSpAddress, (ushort)sp);
+    }
+
+    return sp;
+}
+
+static int PushStack(Pdp8 machine, int value)
+{
+    var sp = ReadStackPointer(machine);
+    machine.Write(sp, (ushort)value);
+    sp++;
+    if (sp > StackTopAddress)
+    {
+        sp = StackBaseAddress;
+    }
+
+    machine.Write(StackSpAddress, (ushort)sp);
+    return sp;
+}
+
+static int PopStack(Pdp8 machine)
+{
+    var sp = ReadStackPointer(machine);
+    sp--;
+    if (sp < StackBaseAddress)
+    {
+        sp = StackTopAddress;
+    }
+
+    var value = machine.Read(sp);
+    machine.Write(StackSpAddress, (ushort)sp);
+    return value;
+}
+
+static void ShowStack(Pdp8 machine)
+{
+    var sp = ReadStackPointer(machine);
+    Console.WriteLine($"SP={Pdp8.ToOctal(sp, 4)} (stack {Pdp8.ToOctal(StackBaseAddress, 4)}-{Pdp8.ToOctal(StackTopAddress, 4)})");
+    for (var addr = StackBaseAddress; addr <= StackTopAddress; addr += 4)
+    {
+        Console.Write($"{Pdp8.ToOctal(addr, 4)}: ");
+        for (var offset = 0; offset < 4 && addr + offset <= StackTopAddress; offset++)
+        {
+            var value = machine.Read(addr + offset);
+            Console.Write($"{Pdp8.ToOctal(value, 4)} ");
+        }
+
+        Console.WriteLine();
+    }
+}
+
+static bool IsStackOperator(string token)
+{
+    return token == "+" ||
+        token == "-" ||
+        token == "@" ||
+        token == "!" ||
+        token.Equals("and", StringComparison.OrdinalIgnoreCase) ||
+        token.Equals("or", StringComparison.OrdinalIgnoreCase) ||
+        token.Equals("not", StringComparison.OrdinalIgnoreCase);
+}
+
+static void ExecuteStackOperator(Pdp8 machine, string token)
+{
+    switch (token)
+    {
+        case "+":
+            ApplyBinaryStackOp(machine, (left, right) => left + right);
+            break;
+        case "-":
+            ApplyBinaryStackOp(machine, (left, right) => left - right);
+            break;
+        case "@":
+            ApplyGetStackOp(machine);
+            break;
+        case "!":
+            ApplyPutStackOp(machine);
+            break;
+        default:
+            if (token.Equals("and", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyBinaryStackOp(machine, (left, right) => left & right);
+            }
+            else if (token.Equals("or", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyBinaryStackOp(machine, (left, right) => left | right);
+            }
+            else if (token.Equals("not", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyUnaryStackOp(machine, value => ~value);
+            }
+            break;
+    }
+}
+
+static void ApplyBinaryStackOp(Pdp8 machine, Func<int, int, int> operation)
+{
+    var right = PopStack(machine);
+    var left = PopStack(machine);
+    var result = operation(left, right) & 0xFFF;
+    PushStack(machine, result);
+}
+
+static void ApplyUnaryStackOp(Pdp8 machine, Func<int, int> operation)
+{
+    var value = PopStack(machine);
+    var result = operation(value) & 0xFFF;
+    PushStack(machine, result);
+}
+
+static void ApplyGetStackOp(Pdp8 machine)
+{
+    var address = PopStack(machine) & 0xFFF;
+    var value = machine.Read(address);
+    PushStack(machine, value);
+}
+
+static void ApplyPutStackOp(Pdp8 machine)
+{
+    var address = PopStack(machine) & 0xFFF;
+    var value = PopStack(machine) & 0xFFF;
+    machine.Write(address, (ushort)value);
 }
 
 static void DumpMemory(Pdp8 machine, List<string> args)
